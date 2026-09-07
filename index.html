@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CPR AR Learning Media - Paramedic Edition</title>
+  <!-- โหลดไลบรารี A-Frame และ AR.js -->
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    #ui-container {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.9);
+      color: #ffffff;
+      padding: 12px 20px;
+      border-radius: 12px;
+      z-index: 1000;
+      width: 85%;
+      max-width: 450px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      border: 1px solid #38bdf8;
+    }
+    #ui-container h3 {
+      margin: 0 0 6px 0;
+      color: #38bdf8;
+      font-size: 16px;
+    }
+    #ui-container p {
+      margin: 2px 0;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .badge {
+      display: inline-block;
+      background: #ef4444;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- UI แสดงคำแนะนำด้านล่างหน้าจอ -->
+  <div id="ui-container">
+    <h3>สื่อการสอน AR: High-Quality CPR</h3>
+    <p><span class="badge">ตำแหน่ง</span> กึ่งกลางหน้าอก (Lower half of sternum)</p>
+    <p><span class="badge">ความลึก/อัตรา</span> 5-6 ซม. | 100-120 ครั้ง/นาที (30:2)</p>
+  </div>
+
+  <!-- A-Frame AR Scene -->
+  <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;">
+    
+    <!-- Marker ประเภท Hiro (ส่องกล้องไปที่มาร์กเกอร์เพื่อแสดงผล) -->
+    <a-marker preset="hiro">
+      
+      <!-- 1. แบบจำลองลำตัวผู้ป่วย (Torso) -->
+      <a-box position="0 0.1 0" width="1.4" height="0.2" depth="1.8" color="#334155" opacity="0.85"></a-box>
+      <!-- หัวผู้ป่วย (จัดท่า Head-tilt chin-lift) -->
+      <a-sphere position="0 0.25 -1.1" radius="0.35" color="#cbd5e1"></a-sphere>
+      
+      <!-- 2. จุดกดหน้าอก (Compression Target) มีลูกศรและแสง Pulse แสดงจังหวะ 110 bpm (~0.55s) -->
+      <a-cylinder position="0 0.22 0.1" radius="0.25" height="0.05" color="#ef4444" opacity="0.8">
+        <a-animation attribute="material.opacity" from="0.4" to="1" dur="550" repeat="indefinite" direction="alternate"></a-animation>
+      </a-cylinder>
+
+      <!-- มือจำลอง & ลูกศรทิศทางการกดลงตามแนวดิ่ง (Perpendicular 90°) -->
+      <a-entity position="0 0.7 0.1"
+                animation="property: position; to: 0 0.35 0.1; dur: 275; dir: alternate; loop: true; easing: easeInOutQuad">
+        <!-- ลูกศรชี้ลง -->
+        <a-cone position="0 0 0" rotation="180 0 0" radius-bottom="0.12" radius-top="0.01" height="0.3" color="#eab308"></a-cone>
+        <!-- ป้ายข้อความบอกความลึก -->
+        <a-text value="5 - 6 cm\n90 deg" align="center" position="0 0.3 0" scale="0.6 0.6 0.6" color="#ffffff"></a-text>
+      </a-entity>
+
+      <!-- 3. ป้าย 3D แสดง Protocol กู้ชีพ (Emergency Checklist) -->
+      <a-plane position="1.1 0.6 0" rotation="-30 -30 0" width="0.9" height="1.1" color="#0f172a" material="opacity: 0.95; side: double">
+        <a-text value="CPR STEPS\n1. Scene Safety\n2. Check Response\n3. Call 1669 / AED\n4. Push Fast & Hard\n5. Open Airway (30:2)" 
+                align="left" position="-0.4 0 0.05" scale="0.3 0.3 0.3" color="#38bdf8"></a-text>
+      </a-plane>
+
+    </a-marker>
+
+    <!-- กล้อง AR -->
+    <a-entity camera></a-entity>
+  </a-scene>
+
+</body>
+</html>
