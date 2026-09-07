@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>WebAR CPR Training Simulator | Paramedic Edition</title>
+
+<!-- ===================== CDN LIBRARIES ===================== -->
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+
+<style>
+:root{
+  --bg-slate:#0b1220;
+  --panel-bg:rgba(10,25,35,0.55);
+  --panel-border:rgba(0,229,255,0.35);
+  --cyan:#00e5ff;
+  --cyan-dim:#0aa8bd;
+  --red:#ff2d55;
+  --red-glow:0 0 12px rgba(255,45,85,0.8);
+  --green:#26ff8f;
+  --amber:#ffb020;
+  --text:#e8fbff;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{
+  margin:0;padding:0;width:100%;height:100%;
+  background:#000;
+  font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+  color:var(--text);
+  overflow:hidden;
+}
+a-scene{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;}
+
+/* ---------- HUD LAYER ---------- */
+#hud{
+  position:fixed;inset:0;z-index:10;
+  pointer-events:none;
+  display:flex;flex-direction:column;justify-content:space-between;
+}
+.glass{
+  background:var(--panel-bg);
+  border:1px solid var(--panel-border);
+  backdrop-filter:blur(10px) saturate(140%);
+  -webkit-backdrop-filter:blur(10px) saturate(140%);
+  border-radius:16px;
+  box-shadow:0 4px 20px rgba(0,0,0,0.45);
+}
+
+/* Top bar */
+#topbar{
+  pointer-events:auto;
+  margin:10px 10px 0 10px;
+  padding:8px 10px;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:8px;
+}
+#topbar .brand{
+  display:flex;flex-direction:column;line-height:1.1;
+}
+#topbar .brand b{font-size:13px;letter-spacing:1px;color:var(--cyan);}
+#topbar .brand span{font-size:10px;color:#9fd8e0;}
+#statusDot{
+  width:10px;height:10px;border-radius:50%;
+  background:var(--red);box-shadow:var(--red-glow);
+  animation:blink 1.4s infinite;
+  margin-right:6px;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+#markerStatus{font-size:10px;display:flex;align-items:center;color:#cfeff5;}
+
+/* Scenario switcher */
+#scenarioBar{
+  pointer-events:auto;
+  margin:8px 10px 0 10px;
+  display:flex;gap:6px;padding:6px;
+}
+.scn-btn{
+  flex:1;border:none;border-radius:12px;padding:8px 4px;
+  background:rgba(255,255,255,0.04);
+  color:#d7f4f9;font-size:10.5px;font-weight:600;
+  border:1px solid rgba(0,229,255,0.15);
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  transition:all .15s ease;
+}
+.scn-btn .ic{font-size:16px;}
+.scn-btn.active{
+  background:linear-gradient(135deg,var(--cyan-dim),var(--cyan));
+  color:#00222a;border-color:var(--cyan);
+  box-shadow:0 0 14px rgba(0,229,255,0.55);
+}
+
+/* Middle spacer keeps camera visible, holds floating side controls */
+#midRow{
+  flex:1;display:flex;align-items:center;justify-content:space-between;
+  padding:0 10px;pointer-events:none;
+}
+.side-col{display:flex;flex-direction:column;gap:10px;pointer-events:auto;}
+.icon-btn{
+  width:52px;height:52px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;border:1px solid var(--panel-border);
+  color:var(--text);
+}
+.icon-btn.on{
+  background:linear-gradient(135deg,#00b7c9,#00e5ff);
+  color:#00222a;box-shadow:0 0 16px rgba(0,229,255,0.65);
+}
+#bpmChip{
+  pointer-events:auto;
+  text-align:center;font-size:10px;padding:4px 6px;border-radius:10px;
+  color:#bdeef5;
+}
+#bpmChip b{display:block;font-size:15px;color:var(--cyan);}
+
+/* Airway button */
+#airwayBtn{
+  pointer-events:auto;font-size:10.5px;font-weight:600;color:#dffbff;
+  padding:8px;border-radius:12px;text-align:center;line-height:1.2;
+  border:1px solid rgba(0,229,255,0.2);
+}
+#airwayBtn.active{background:rgba(0,229,255,0.18);border-color:var(--cyan);}
+
+/* Bottom panel */
+#bottombar{
+  pointer-events:auto;
+  margin:0 10px 12px 10px;
+  padding:10px 12px 12px 12px;
+  display:flex;flex-direction:column;gap:8px;
+}
+#ratioRow{
+  display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#bfeef5;
+}
+#ratioRow b{color:var(--cyan);font-size:13px;}
+#counterPill{
+  background:rgba(0,0,0,0.35);border-radius:10px;padding:3px 10px;
+  font-weight:700;color:var(--red);border:1px solid rgba(255,45,85,0.4);
+}
+#gaugeRow{display:flex;align-items:center;gap:12px;}
+#gaugeCanvas{flex-shrink:0;}
+#gaugeText{flex:1;}
+#depthLabel{font-size:13px;font-weight:700;letter-spacing:.5px;}
+#rateLabel{font-size:10.5px;color:#a9dee6;margin-top:2px;}
+#hintLabel{font-size:9.5px;color:#7fbfca;margin-top:4px;}
+
+/* Breath prompt overlay */
+#breathPrompt{
+  position:fixed;inset:0;z-index:20;
+  display:none;align-items:center;justify-content:center;
+  background:rgba(0,10,15,0.55);backdrop-filter:blur(4px);
+  pointer-events:auto;
+}
+#breathPrompt .card{
+  padding:26px 30px;text-align:center;border-radius:20px;
+  border:1px solid var(--cyan);
+}
+#breathPrompt .card h2{margin:0 0 6px 0;color:var(--cyan);font-size:20px;}
+#breathPrompt .card p{margin:0 0 14px 0;font-size:12px;color:#cdeef4;}
+#breathPrompt button{
+  border:none;padding:10px 22px;border-radius:12px;font-weight:700;
+  background:linear-gradient(135deg,#00b7c9,#00e5ff);color:#00222a;font-size:13px;
+}
+
+/* AED overlay */
+#aedPanel{
+  pointer-events:auto;margin:0 10px 12px 10px;padding:12px;
+  display:none;flex-direction:column;gap:8px;
+}
+#aedStatusText{font-size:13px;font-weight:700;text-align:center;color:var(--amber);min-height:18px;}
+#shockBtn{
+  border:none;border-radius:14px;padding:12px;font-weight:800;letter-spacing:1px;
+  background:linear-gradient(135deg,#ff2d55,#ff6b6b);color:#fff;font-size:13px;
+  box-shadow:0 0 18px rgba(255,45,85,0.6);
+}
+#shockBtn:disabled{opacity:.35;box-shadow:none;}
+#aedSteps{font-size:10px;color:#bfeef5;text-align:center;line-height:1.5;}
+
+/* Instruction / marker modal */
+#introModal{
+  position:fixed;inset:0;z-index:50;
+  background:rgba(2,8,14,0.92);
+  display:flex;align-items:center;justify-content:center;padding:18px;
+}
+#introModal .box{
+  max-width:420px;width:100%;padding:20px;border-radius:20px;
+  border:1px solid var(--cyan);max-height:88vh;overflow-y:auto;
+}
+#introModal h1{font-size:18px;color:var(--cyan);margin:0 0 4px 0;}
+#introModal h2{font-size:13px;color:var(--red);margin:14px 0 6px 0;}
+#introModal p, #introModal li{font-size:12px;color:#d7f2f6;line-height:1.6;}
+#introModal .markerImgWrap{
+  background:#fff;border-radius:10px;padding:8px;margin:10px 0;text-align:center;
+}
+#introModal .markerImgWrap img{width:130px;image-rendering:pixelated;}
+#startBtn{
+  width:100%;border:none;padding:13px;border-radius:14px;margin-top:14px;
+  background:linear-gradient(135deg,#00b7c9,#00e5ff);color:#00222a;font-weight:800;font-size:14px;
+}
+#introModal .warn{
+  font-size:10.5px;color:var(--amber);border-left:2px solid var(--amber);padding-left:8px;margin-top:10px;
+}
+
+/* Tap layer for registering compressions (only active in CPR scenarios) */
+#tapLayer{position:fixed;inset:0;z-index:5;}
+
+@media (max-width:360px){
+  .icon-btn{width:44px;height:44px;font-size:18px;}
+  #topbar .brand b{font-size:11px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== INTRO / MARKER MODAL ===================== -->
+<div id="introModal">
+  <div class="box glass">
+    <h1>🚑 WebAR CPR Training Simulator</h1>
+    <p>ระบบจำลองการฝึก CPR แบบ Augmented Reality สำหรับนักศึกษาฉุกเฉินการแพทย์ ใช้งานผ่านกล้องมือถือโดยตรง ไม่ต้องติดตั้งแอป</p>
+
+    <h2>วิธีใช้งาน</h2>
+    <ol>
+      <li>อนุญาตให้เว็บไซต์ใช้กล้อง (Camera) เมื่อเบราว์เซอร์ถาม</li>
+      <li>เปิดภาพ Marker "Hiro" (ด้านล่าง) บนหน้าจออีกเครื่อง หรือสั่งพิมพ์ออกมา</li>
+      <li>ส่องกล้องมือถือไปที่ Marker ให้เห็นเต็มกรอบ หุ่นจำลองทรวงอกจะปรากฏขึ้น</li>
+      <li>เลือกสถานการณ์ (Scenario) ที่ต้องการฝึกจากแถบด้านบน</li>
+      <li>แตะหน้าจอเป็นจังหวะเพื่อจำลองการกดหน้าอก ระบบจะประเมินอัตราเร็ว/แรงกดให้อัตโนมัติ</li>
+    </ol>
+
+    <div class="markerImgWrap">
+      <img src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png" alt="Hiro Marker">
+      <div style="font-size:10px;color:#333;margin-top:4px;">Hiro Marker (มาตรฐาน AR.js)</div>
+    </div>
+
+    <div class="warn">
+      ⚠️ หมายเหตุด้านความแม่นยำ: ค่า "ความลึกการกด" ในเดโมนี้เป็นการจำลอง (proxy) จากระยะเวลาที่นิ้วสัมผัสหน้าจอ เนื่องจากสมาร์ตโฟนทั่วไปไม่มีเซนเซอร์วัดระยะกดจริงบนทรวงอก ใช้เพื่อฝึกจังหวะและความรู้สึกเชิงการสอนเท่านั้น ไม่ใช่อุปกรณ์การแพทย์
+    </div>
+
+    <button id="startBtn">เข้าสู่โหมด AR Training</button>
+  </div>
+</div>
+
+<!-- ===================== AR SCENE ===================== -->
+<a-scene
+  vr-mode-ui="enabled: false"
+  renderer="logarithmicDepthBuffer: true; antialias: true; alpha: true"
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+  loading-screen="enabled: false">
+
+  <a-assets>
+    <a-mixin id="pulseAnim" animation="property: scale; to: 1.25 1.25 1.25; dir: alternate; loop: true; dur: 550; easing: easeInOutSine"></a-mixin>
+  </a-assets>
+
+  <a-marker id="hiroMarker" preset="hiro" emitevents="true" raycaster="objects: .clickable" cursor="fuse: false; rayOrigin: mouse;">
+
+    <a-entity id="rig" rotation="-90 0 0" position="0 0 0">
+
+      <!-- ===== TORSO (Anatomic reference) ===== -->
+      <a-entity id="torso" position="0 0.05 0">
+        <!-- rib cage / chest base -->
+        <a-entity geometry="primitive: cylinder; radius: 0.62; height: 0.55; segmentsRadial: 24"
+                   material="color:#c98a72; roughness:0.75; metalness:0.05"
+                   position="0 0.28 0" scale="1 1 0.72"></a-entity>
+        <!-- abdomen taper -->
+        <a-entity geometry="primitive: cylinder; radius: 0.5; height:0.35; segmentsRadial: 24"
+                   material="color:#b97a63; roughness:0.8"
+                   position="0 -0.05 0" scale="1 1 0.68"></a-entity>
+        <!-- sternum midline strip -->
+        <a-entity geometry="primitive: box; width:0.055; height:0.5; depth:0.02"
+                   material="color:#e9c9b6; emissive:#331408; emissiveIntensity:0.15"
+                   position="0 0.28 0.235"></a-entity>
+        <!-- sternum label ring: xiphoid landmark -->
+        <a-entity geometry="primitive: ring; radiusInner:0.02; radiusOuter:0.035"
+                   material="color:#ffffff" position="0 0.06 0.235" rotation="90 0 0"></a-entity>
+        <!-- neck -->
+        <a-entity geometry="primitive: cylinder; radius:0.16; height:0.22"
+                   material="color:#c98a72" position="0 0.72 0"></a-entity>
+      </a-entity>
+
+      <!-- ===== HEAD with Airway Maneuver ===== -->
+      <a-entity id="headRig" position="0 0.95 0.02">
+        <a-entity id="head" geometry="primitive: sphere; radius:0.22"
+                  material="color:#d79c85; roughness:0.7"
+                  position="0 0 -0.02"></a-entity>
+        <a-entity id="jawArrowGroup" visible="false">
+          <a-entity geometry="primitive: cone; radiusBottom:0.03; radiusTop:0; height:0.14"
+                    material="color:#00e5ff; emissive:#00e5ff; emissiveIntensity:0.9"
+                    rotation="0 0 -70" position="0.05 -0.12 0.16"></a-entity>
+          <a-entity text="value: Head-Tilt / Chin-Lift; color:#00e5ff; align:center; width:1.2"
+                    position="0 -0.32 0.16" rotation="90 0 0" scale="1 1 1"></a-entity>
+        </a-entity>
+      </a-entity>
+
+      <!-- ===== PULSE TARGET CIRCLE (lower half of sternum) ===== -->
+      <a-entity id="pulseTarget"
+                geometry="primitive: ring; radiusInner:0.075; radiusOuter:0.095"
+                material="color:#ff2d55; emissive:#ff2d55; emissiveIntensity:0.8; shader:flat; side:double"
+                position="0 0.31 0.245" rotation="90 0 0"
+                mixin="pulseAnim"></a-entity>
+      <a-entity id="pulseTargetFill"
+                geometry="primitive: circle; radius:0.06"
+                material="color:#ff2d55; opacity:0.25; transparent:true; shader:flat"
+                position="0 0.31 0.244" rotation="90 0 0"></a-entity>
+
+      <!-- ===== COMPRESSING HANDS ===== -->
+      <a-entity id="handsRig" position="0 0.62 0.24">
+        <a-entity geometry="primitive: box; width:0.16; height:0.05; depth:0.24"
+                   material="color:#e8c6ad; roughness:0.6"
+                   position="0 0 0"></a-entity>
+        <a-entity geometry="primitive: box; width:0.13; height:0.045; depth:0.2"
+                   material="color:#f2d6bd; roughness:0.6"
+                   position="0 0.05 0"></a-entity>
+      </a-entity>
+
+      <!-- ===== AED PADS (visible only in AED scenario) ===== -->
+      <a-entity id="aedPads" visible="false">
+        <a-entity geometry="primitive: circle; radius:0.09"
+                   material="color:#ffb020; emissive:#ffb020; emissiveIntensity:0.5; shader:flat"
+                   position="0.32 0.55 0.2" rotation="90 -20 0"></a-entity>
+        <a-entity text="value: PAD 1 (Right infraclavicular); color:#ffb020; align:center; width:1"
+                   position="0.32 0.68 0.2" rotation="90 -20 0"></a-entity>
+        <a-entity geometry="primitive: circle; radius:0.09"
+                   material="color:#ffb020; emissive:#ffb020; emissiveIntensity:0.5; shader:flat"
+                   position="-0.28 -0.02 0.28" rotation="90 20 0"></a-entity>
+        <a-entity text="value: PAD 2 (Left mid-axillary); color:#ffb020; align:center; width:1"
+                   position="-0.28 -0.16 0.28" rotation="90 20 0"></a-entity>
+      </a-entity>
+
+      <a-entity light="type: directional; intensity:0.9" position="0.5 1 1"></a-entity>
+      <a-entity light="type: ambient; intensity:0.65"></a-entity>
+    </a-entity>
+  </a-marker>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+<!-- ===================== TAP LAYER (records compressions) ===================== -->
+<div id="tapLayer"></div>
+
+<!-- ===================== HUD ===================== -->
+<div id="hud">
+
+  <!-- top bar -->
+  <div id="topbar" class="glass">
+    <div class="brand">
+      <b>PARAMEDIC AR-CPR</b>
+      <span>Training Simulator v1.0</span>
+    </div>
+    <div id="markerStatus"><span id="statusDot"></span><span id="statusTxt">No Marker</span></div>
+  </div>
+
+  <div id="scenarioBar" class="glass">
+    <button class="scn-btn active" data-scn="adult"><span class="ic">🫀</span>Adult<br>30:2</button>
+    <button class="scn-btn" data-scn="pediatric"><span class="ic">👶</span>Pediatric<br>15:2</button>
+    <button class="scn-btn" data-scn="aed"><span class="ic">⚡</span>AED<br>Shock</button>
+  </div>
+
+  <div id="midRow">
+    <div class="side-col">
+      <button id="metroBtn" class="icon-btn glass">🔇</button>
+      <div id="bpmChip" class="glass"><b id="bpmVal">110</b>bpm</div>
+      <button id="airwayBtn" class="glass">แสดง<br>Airway<br>Maneuver</button>
+    </div>
+    <div class="side-col" style="align-items:flex-end;">
+      <button id="resetBtn" class="icon-btn glass">↺</button>
+    </div>
+  </div>
+
+  <!-- CPR bottom panel -->
+  <div id="bottombar" class="glass">
+    <div id="ratioRow">
+      <div>Compression : Ventilation <b id="ratioTxt">30 : 2</b></div>
+      <div id="counterPill"><span id="counterVal">0</span>/<span id="counterMax">30</span></div>
+    </div>
+    <div id="gaugeRow">
+      <canvas id="gaugeCanvas" width="86" height="50"></canvas>
+      <div id="gaugeText">
+        <div id="depthLabel">แตะหน้าจอเพื่อเริ่มกด</div>
+        <div id="rateLabel">Rate: -- /min</div>
+        <div id="hintLabel">เป้าหมาย: 100–120 ครั้ง/นาที • ลึก 5–6 ซม.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AED bottom panel -->
+  <div id="aedPanel" class="glass">
+    <div id="aedStatusText">แตะปุ่มเพื่อเริ่มวิเคราะห์คลื่นหัวใจ</div>
+    <div id="aedSteps">1) แปะ Pad ตามตำแหน่งบนหุ่นจำลอง → 2) วิเคราะห์จังหวะ → 3) Clear! → 4) Shock → 5) กลับไปทำ CPR ทันที</div>
+    <button id="shockBtn">▶ START AED ANALYSIS</button>
+  </div>
+</div>
+
+<!-- Breath prompt overlay -->
+<div id="breathPrompt">
+  <div class="card glass">
+    <h2 id="breathTitle">Give 2 Rescue Breaths</h2>
+    <p id="breathSub">หยุดกดหน้าอก แล้วช่วยหายใจ 2 ครั้ง ก่อนกลับไปกดต่อ</p>
+    <button id="breathContinue">กลับไปกดหน้าอกต่อ</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= STATE ================= */
+  const state = {
+    scenario: 'adult',
+    metronomeOn: false,
+    bpm: 110,
+    compressions: 0,
+    ratioMax: 30,
+    tapTimestamps: [],   // for rate calc
+    lastTapDown: 0,
+    airwayShown: false,
+    audioCtx: null,
+    metroTimer: null,
+    markerVisible: false
+  };
+
+  const SCENARIOS = {
+    adult:     { label:'Adult Cardiac Arrest',  ratio:'30 : 2', ratioMax:30, depthTarget:'5–6 ซม.', depthRange:[5,6] },
+    pediatric: { label:'Pediatric Arrest',       ratio:'15 : 2', ratioMax:15, depthTarget:'~5 ซม. (1/3 ทรวงอก)', depthRange:[4,5] },
+    aed:       { label:'AED Placement & Shock',  ratio:'—',      ratioMax:0,  depthTarget:'—', depthRange:[0,0] }
+  };
+
+  /* ================= DOM REFS ================= */
+  const $ = id => document.getElementById(id);
+  const introModal = $('introModal');
+  const startBtn = $('startBtn');
+  const scnBtns = document.querySelectorAll('.scn-btn');
+  const metroBtn = $('metroBtn');
+  const bpmVal = $('bpmVal');
+  const airwayBtn = $('airwayBtn');
+  const resetBtn = $('resetBtn');
+  const ratioTxt = $('ratioTxt');
+  const counterVal = $('counterVal');
+  const counterMax = $('counterMax');
+  const depthLabel = $('depthLabel');
+  const rateLabel = $('rateLabel');
+  const hintLabel = $('hintLabel');
+  const gaugeCanvas = $('gaugeCanvas');
+  const gaugeCtx = gaugeCanvas.getContext('2d');
+  const bottombar = $('bottombar');
+  const aedPanel = $('aedPanel');
+  const shockBtn = $('shockBtn');
+  const aedStatusText = $('aedStatusText');
+  const breathPrompt = $('breathPrompt');
+  const breathContinue = $('breathContinue');
+  const tapLayer = $('tapLayer');
+  const statusDot = $('statusDot');
+  const statusTxt = $('statusTxt');
+
+  const jawArrowGroup = document.querySelector('#jawArrowGroup');
+  const handsRig = document.querySelector('#handsRig');
+  const aedPads = document.querySelector('#aedPads');
+  const marker = document.querySelector('#hiroMarker');
+
+  /* ================= INTRO ================= */
+  startBtn.addEventListener('click', () => {
+    introModal.style.display = 'none';
+    // unlock audio context on user gesture (iOS requirement)
+    initAudio();
+  });
+
+  /* ================= MARKER TRACKING STATUS ================= */
+  marker.addEventListener('markerFound', () => {
+    state.markerVisible = true;
+    statusDot.style.background = 'var(--green)';
+    statusDot.style.boxShadow = '0 0 10px rgba(38,255,143,0.8)';
+    statusTxt.textContent = 'Marker Locked';
+  });
+  marker.addEventListener('markerLost', () => {
+    state.markerVisible = false;
+    statusDot.style.background = 'var(--red)';
+    statusDot.style.boxShadow = '0 0 12px rgba(255,45,85,0.8)';
+    statusTxt.textContent = 'No Marker';
+  });
+
+  /* ================= SCENARIO SWITCH ================= */
+  scnBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      scnBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      setScenario(btn.dataset.scn);
+    });
+  });
+
+  function setScenario(key){
+    state.scenario = key;
+    const cfg = SCENARIOS[key];
+    resetCounter();
+
+    if(key === 'aed'){
+      bottombar.style.display = 'none';
+      aedPanel.style.display = 'flex';
+      aedPads.setAttribute('visible', true);
+      handsRig.setAttribute('visible', false);
+      tapLayer.style.pointerEvents = 'none';
+      resetAedFlow();
+    } else {
+      bottombar.style.display = 'flex';
+      aedPanel.style.display = 'none';
+      aedPads.setAttribute('visible', false);
+      handsRig.setAttribute('visible', true);
+      tapLayer.style.pointerEvents = 'auto';
+      ratioTxt.textContent = cfg.ratio;
+      counterMax.textContent = cfg.ratioMax;
+      hintLabel.textContent = `เป้าหมาย: 100–120 ครั้ง/นาที • ลึก ${cfg.depthTarget}`;
+    }
+  }
+
+  /* ================= METRONOME (Audio + Vibration + Hand Animation) ================= */
+  function initAudio(){
+    if(!state.audioCtx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      state.audioCtx = new AC();
+    }
+  }
+
+  function beep(){
+    if(!state.audioCtx) return;
+    const ctx = state.audioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+    if(navigator.vibrate) navigator.vibrate(40);
+  }
+
+  function startMetronome(){
+    stopMetronome();
+    const interval = 60000 / state.bpm;
+    // sync hand animation duration to bpm (down+up = one interval)
+    handsRig.setAttribute('animation__comp',
+      `property: position; from: 0 0.62 0.24; to: 0 0.545 0.24; dir: alternate; loop: true; dur: ${interval/2}; easing: easeInOutQuad`);
+    beep();
+    state.metroTimer = setInterval(beep, interval);
+  }
+  function stopMetronome(){
+    if(state.metroTimer){ clearInterval(state.metroTimer); state.metroTimer = null; }
+    handsRig.removeAttribute('animation__comp');
+  }
+
+  metroBtn.addEventListener('click', () => {
+    initAudio();
+    state.metronomeOn = !state.metronomeOn;
+    metroBtn.textContent = state.metronomeOn ? '🔊' : '🔇';
+    metroBtn.classList.toggle('on', state.metronomeOn);
+    if(state.metronomeOn) startMetronome(); else stopMetronome();
+  });
+
+  /* allow long-press on bpm chip to nudge bpm within AHA range 100-120 */
+  $('bpmChip').addEventListener('click', () => {
+    state.bpm += 5;
+    if(state.bpm > 120) state.bpm = 100;
+    bpmVal.textContent = state.bpm;
+    if(state.metronomeOn) startMetronome();
+  });
+
+  /* ================= AIRWAY MANEUVER ================= */
+  airwayBtn.addEventListener('click', () => {
+    state.airwayShown = !state.airwayShown;
+    airwayBtn.classList.toggle('active', state.airwayShown);
+    jawArrowGroup.setAttribute('visible', state.airwayShown);
+    const headRig = document.querySelector('#headRig');
+    if(state.airwayShown){
+      headRig.setAttribute('animation__tilt',
+        'property: rotation; to: -22 0 0; dur: 700; easing: easeOutQuad');
+    } else {
+      headRig.setAttribute('animation__tilt',
+        'property: rotation; to: 0 0 0; dur: 700; easing: easeOutQuad');
+    }
+  });
+
+  /* ================= COMPRESSION TAP HANDLING ================= */
+  tapLayer.addEventListener('touchstart', onDown, {passive:true});
+  tapLayer.addEventListener('mousedown', onDown);
+  tapLayer.addEventListener('touchend', onUp, {passive:true});
+  tapLayer.addEventListener('mouseup', onUp);
+
+  function onDown(e){
+    if(state.scenario === 'aed') return;
+    state.lastTapDown = performance.now();
+  }
+
+  function onUp(e){
+    if(state.scenario === 'aed') return;
+    const now = performance.now();
+    const pressDuration = now - state.lastTapDown;
+
+    // register compression event timestamp for rate calc
+    state.tapTimestamps.push(now);
+    state.tapTimestamps = state.tapTimestamps.filter(t => now - t <= 6000); // trailing 6s window
+
+    state.compressions++;
+    counterVal.textContent = state.compressions;
+
+    if(navigator.vibrate) navigator.vibrate(15);
+    animateHandTap();
+    evaluateCompression(pressDuration);
+
+    const cfg = SCENARIOS[state.scenario];
+    if(state.compressions >= cfg.ratioMax){
+      triggerBreathPrompt();
+    }
+  }
+
+  function animateHandTap(){
+    handsRig.setAttribute('animation__tap',
+      'property: position; from: 0 0.62 0.24; to: 0 0.55 0.24; dir: alternate; dur: 140; easing: easeOutQuad');
+  }
+
+  function evaluateCompression(pressDuration){
+    // --- depth proxy from press duration ---
+    let depthText, depthColor;
+    if(pressDuration < 130){
+      depthText = 'Push Harder (กดตื้นไป)'; depthColor = '#ffb020';
+    } else if(pressDuration <= 420){
+      depthText = 'Good Compression ✔'; depthColor = '#26ff8f';
+    } else {
+      depthText = 'Too Deep / Too Slow Release'; depthColor = '#ff2d55';
+    }
+    depthLabel.textContent = depthText;
+    depthLabel.style.color = depthColor;
+
+    // --- rate calc from trailing timestamps ---
+    const n = state.tapTimestamps.length;
+    let rate = 0;
+    if(n >= 2){
+      const span = (state.tapTimestamps[n-1] - state.tapTimestamps[0]) / 1000; // seconds
+      rate = Math.round((n-1) / span * 60);
+    }
+    rateLabel.textContent = `Rate: ${rate > 0 ? rate : '--'} /min`;
+    drawGauge(rate);
+  }
+
+  function drawGauge(rate){
+    const w = gaugeCanvas.width, h = gaugeCanvas.height;
+    gaugeCtx.clearRect(0,0,w,h);
+    const cx = w/2, cy = h-4, r = 34;
+    // background arc
+    gaugeCtx.lineWidth = 8;
+    gaugeCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+    gaugeCtx.beginPath();
+    gaugeCtx.arc(cx,cy,r,Math.PI,0);
+    gaugeCtx.stroke();
+
+    // value arc: map 0-160 bpm to 0-180deg
+    const maxScale = 160;
+    const pct = Math.min(rate/maxScale,1);
+    let color = '#00e5ff';
+    if(rate >= 100 && rate <= 120) color = '#26ff8f';
+    else if(rate > 120) color = '#ff2d55';
+    else if(rate > 0) color = '#ffb020';
+
+    gaugeCtx.strokeStyle = color;
+    gaugeCtx.beginPath();
+    gaugeCtx.arc(cx,cy,r,Math.PI, Math.PI + Math.PI*pct);
+    gaugeCtx.stroke();
+
+    // needle
+    const ang = Math.PI + Math.PI*pct;
+    gaugeCtx.strokeStyle = '#ffffff';
+    gaugeCtx.lineWidth = 2;
+    gaugeCtx.beginPath();
+    gaugeCtx.moveTo(cx,cy);
+    gaugeCtx.lineTo(cx + Math.cos(ang)*(r-10), cy + Math.sin(ang)*(r-10));
+    gaugeCtx.stroke();
+  }
+  drawGauge(0);
+
+  /* ================= BREATH PROMPT ================= */
+  function triggerBreathPrompt(){
+    const cfg = SCENARIOS[state.scenario];
+    $('breathTitle').textContent = 'Give 2 Rescue Breaths';
+    $('breathSub').textContent = `ครบชุดกดหน้าอก ${cfg.ratioMax} ครั้งแล้ว หยุดกด ช่วยหายใจ 2 ครั้ง (${cfg.ratio}) ก่อนกลับไปกดต่อ`;
+    breathPrompt.style.display = 'flex';
+    if(navigator.vibrate) navigator.vibrate([80,60,80]);
+  }
+  breathContinue.addEventListener('click', () => {
+    breathPrompt.style.display = 'none';
+    resetCounter();
+  });
+
+  function resetCounter(){
+    state.compressions = 0;
+    state.tapTimestamps = [];
+    counterVal.textContent = 0;
+    depthLabel.textContent = 'แตะหน้าจอเพื่อเริ่มกด';
+    depthLabel.style.color = '#e8fbff';
+    rateLabel.textContent = 'Rate: -- /min';
+    drawGauge(0);
+  }
+
+  resetBtn.addEventListener('click', () => {
+    resetCounter();
+    if(state.scenario === 'aed') resetAedFlow();
+  });
+
+  /* ================= AED FLOW ================= */
+  let aedStage = 0;
+  function resetAedFlow(){
+    aedStage = 0;
+    shockBtn.disabled = false;
+    shockBtn.textContent = '▶ START AED ANALYSIS';
+    aedStatusText.textContent = 'แตะปุ่มเพื่อเริ่มวิเคราะห์คลื่นหัวใจ';
+    aedStatusText.style.color = 'var(--amber)';
+  }
+
+  shockBtn.addEventListener('click', () => {
+    if(aedStage === 0){
+      aedStage = 1;
+      shockBtn.disabled = true;
+      aedStatusText.textContent = '🔍 Analyzing rhythm... Do not touch patient';
+      aedStatusText.style.color = '#00e5ff';
+      if(navigator.vibrate) navigator.vibrate(200);
+
+      setTimeout(() => {
+        aedStatusText.textContent = '⚡ Shock Advised — Stand Clear!';
+        aedStatusText.style.color = 'var(--red)';
+        shockBtn.textContent = '⚠ DELIVER SHOCK';
+        shockBtn.disabled = false;
+        aedStage = 2;
+      }, 2600);
+
+    } else if(aedStage === 2){
+      aedStage = 3;
+      shockBtn.disabled = true;
+      aedStatusText.textContent = '💥 SHOCK DELIVERED';
+      aedStatusText.style.color = '#ff2d55';
+      if(navigator.vibrate) navigator.vibrate([100,50,100,50,200]);
+      flashScreen();
+
+      setTimeout(() => {
+        aedStatusText.textContent = '✅ Resume CPR Immediately (30:2)';
+        aedStatusText.style.color = 'var(--green)';
+        shockBtn.textContent = '↺ RESET AED CYCLE';
+        shockBtn.disabled = false;
+        aedStage = 0;
+      }, 1600);
+    } else {
+      resetAedFlow();
+    }
+  });
+
+  function flashScreen(){
+    const f = document.createElement('div');
+    f.style.cssText = 'position:fixed;inset:0;z-index:60;background:#fff;opacity:0.9;pointer-events:none;';
+    document.body.appendChild(f);
+    setTimeout(()=> f.remove(), 150);
+  }
+
+  /* init default scenario UI */
+  setScenario('adult');
+
+})();
+</script>
+</body>
+</html>
